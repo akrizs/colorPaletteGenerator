@@ -1,0 +1,16 @@
+{
+  "name": "colorpalettegenerator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Anton Kristensen <anton@antonedvard.com>",
+  "license": "ISC",
+  "dependencies": {
+    "color": "^3.0.0",
+    "color-convert": "^1.9.3",
+    "color-space": "^1.16.0"
+  }
+}
