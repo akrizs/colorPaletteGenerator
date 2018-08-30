@@ -39,3 +39,6 @@ node_modules
 
 # Export elements
 export/*
+
+# Keep the export folder
+!export/.gitkeep
