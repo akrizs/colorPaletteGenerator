@@ -38,7 +38,15 @@ node_modules
 .awspublish*
 
 # Export elements
-export/*
+
 
 # Keep the export folder
 !export/.gitkeep
+export/*
+nameAndHex.js
+
+# Keep the import folder
+!import/.gitkeep
+!import/example.ase
+!import/example.json
+import/*

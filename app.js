@@ -4,18 +4,17 @@
   //
   //
   // ->
-  const colConv = require("color-convert");
-  const Color = require("color");
-  const ase = require("ase-utils");
+  const ase = require("ase-utils").decode;
   const path = require("path");
   const fs = require("fs");
   const uniqid = require("uniqid");
+  const processColor = require("./colorProcess");
 
   // ->
   //  Start by making sure all the folders are available, if not then create them.
   // ->
   const folder = __dirname;
-  const contentOfFolder = fs.readdirSync(folder); //?
+  const contentOfFolder = fs.readdirSync(folder);
   if (contentOfFolder.includes("export") && contentOfFolder.includes("import")) {
     if (!fs.readdirSync(path.join(folder, "import")).includes("done")) {
       fs.mkdirSync(path.join(folder, "import", "done"));
@@ -31,28 +30,27 @@
     fs.mkdirSync(path.join(folder, "import", "done"));
   } else {
     console.log("Some unknown issues with the folder structure, its not sure that the script will work as it should");
-    return;
   }
   // ->
   //  Start setting the variables to use through the script.
   // ->
 
   // Read the Import folder.
-  const importFolder = fs.readdirSync(path.join(__dirname, "import"));
+  const importFolder = path.join(__dirname, "import")
   // Set the export folder as a variable
   const exportFolder = path.join(__dirname, "export");
-  // Filter out the importFolder array to only include files that end with .json and .ase.
-  const filesToProcess = importFolder.filter(file => file.match(/.json+$/gi) || file.match(/.ase+$/gi));
+  // Read the Import Folder.
+  const folderRead = fs.readdirSync(importFolder);
+  // Filter out the folderRead array to only include files that end with .json and .ase.
+  const filesToProcess = folderRead.filter(file => file.match(/.json+$/gi) || file.match(/.ase+$/gi));
   // ->
   //  Make sure that the import folder includes any files with .json or .ase endings, if not then there is no use
   //  in running the script, so we console log out an error message and return out of the script.
   // ->
-
   if (filesToProcess === undefined || !Array.isArray(filesToProcess) || !filesToProcess.length) {
     console.log("No .json or .ase files found in the import folder, ending the script!")
     return;
   };
-
   // ->
   //  Start itterating through each file inside the import folder.
   // ->
@@ -60,13 +58,14 @@
   // Run on each file that is inside the importFolder.
   filesToProcess.forEach((file) => {
     // ->
-    //  Define all the variables used for every single file processed.
+    //  Define all the variables used for single file processed.
     // ->
     let scssColors;
     // Get the actual palette file location.
     const paletteFile = path.join(__dirname, "import", file);
     // Initiate the json object for the .json file.
     const jsonColors = {};
+    let trimmedFileName, paletteName;
     // Initiate the scss string for the scss file.
     let scssString = "$scotch-colors: (";
 
@@ -76,12 +75,16 @@
 
     // If the file is a .json file then run one parsing, if the file is a .ase file run the other parsing.
     if (file.match(/.json+$/gi)) {
+      // ->
+      //  IF input file is .json format
+      // ->
+      // Use TrimmedFileName as the first Palette Name && for the exported output files.
+      trimmedFileName = file.replace(/.json+$/gi, "");
+      jsonColors[trimmedFileName] = {};
       // Runthrough for .json formatted files.
-      let exportFileName, jsonFile, totalColors;
+      let jsonFile, totalColors;
       // Set the file variable as the actual file and encode the .json document provided.
       jsonFile = JSON.parse(fs.readFileSync(paletteFile).toString());
-      // Set the exporting filename.
-      exportFileName = jsonFile.name;
       // Count the total amount of colors in each palette.
       totalColors = jsonFile.colors.length;
 
@@ -89,51 +92,69 @@
         let colorName = color.name;
       });
       // End of .json file process.
+
+
     } else if (file.match(/.ase+$/gi)) {
+      // ->
+      //  IF input file is .ase format
+      // ->
+      // Use TrimmedFileName as the first Palette Name && for the exported output files.
+      trimmedFileName = file.replace(/.ase+$/gi, "");
+      jsonColors[trimmedFileName] = {};
       // Runthrough for .ase fileformat.
       let exportFileName, aseFile, totalColors;
       // Set the file contents in a variable and decode it.
-      aseFile = ase.decode(fs.readFileSync(paletteFile));
-      // Create the exported file name.
-      exportFileName = aseFile.groups[0].name;
+      aseFile = ase(fs.readFileSync(paletteFile));
       // Count the amount of colors in the palette.
       totalColors = aseFile.colors.length;
+      console.log(totalColors);
       // Run through each color in the palette and work the magic
       aseFile.colors.forEach(color => {
-        let colorName, dL, colorSpace, r, g, b, c, m, y, k;
-        // Set the color name if any
-        if (color.name) {
-          colorName = color.name;
-        } else {
-          throw new Error("No name for the color, setting it as a random string");
-          colorName = uniqid();
-        }
-        // Darken/ligthen value
-        dL = 0.7;
+        let colorName, dL, colorSpace, r, g, b, c, m, y, k, l, a, colorType;
+
         // Store the color space.
-        colorSpace = color.model
-        if (colorSpace == "RGB") {
-          // Calculate and normalize RGB Values
-          r = Math.round(color.color[0] * 255);
-          g = Math.round(color.color[1] * 255);
-          b = Math.round(color.color[2] * 255);
-        } else if (colorSpace == "CMYK") {
-          c = "";
-          m = "";
-          y = "";
-          k = "";
-        } else if (colorSpace == "HSB") {
-          // Calculate and normalize HSB Values
-        } else if (colorSpace == "HSL") {
-          // Calculate and normalize CMYK Values
-        } else {
-          // Throw an error if no color space is defined in the .ase color object.
-          throw new Error(`No color space defined on color ${colorName}, in ${file}`);
+        colorSpace = color.model.toLowerCase();
+        // Create the array to send to the color processor.
+        let arrayToProcess = [];
+        if (color.type && (typeof color.type === "string") && color.type.length) {
+          colorType = color.type
         }
 
+        // Set the color name if any
+        if (color.name && (typeof color.name === "string") && color.name.length) {
+          colorName = color.name;
+        } else {
+          colorName = "giveMeAName";
+        }
+        // Start to fill into the array to process, beginning with the color name.
+        arrayToProcess[0] = colorName;
+        // Then create the object at the second pos in the array.
+        arrayToProcess[1] = {};
+        arrayToProcess[2] = colorType;
+        // Run a check agains the color-space to be sure what colors to push into the processor.
+        if (colorSpace === "rgb") {
+          arrayToProcess[1].r = color.color[0];
+          arrayToProcess[1].g = color.color[1];
+          arrayToProcess[1].b = color.color[2];
+        } else if (colorSpace === "cmyk") {
+          arrayToProcess[1].c = color.color[0];
+          arrayToProcess[1].m = color.color[1];
+          arrayToProcess[1].y = color.color[2];
+          arrayToProcess[1].k = color.color[3];
+        } else if (colorSpace === "lab") {
+          arrayToProcess[1].l = color.color[0];
+          arrayToProcess[1].a = color.color[1];
+          arrayToProcess[1].b = color.color[2];
+        } else {
+          throw new Error("Unknown Color Space/Model");
+        }
+
+        let returnedColor = processColor(arrayToProcess, colorSpace);
+        // @TODO: Put darken lighten value into the normalize color and the possibility to overwrite the alpha channel.
+        jsonColors[returnedColor[0]] = returnedColor[1];
       });
-      // End of .ase file process.
     }
+    // console.log(jsonColors);
     let scssColorArray = scssString.substr(0, scssString.length - 2);
     scssColorArray += ");";
     let defaultDarkLighten = "$default-darken-lighten: 7%;";
@@ -141,71 +162,55 @@
     // scssColors for .scss file with all base colors
     // scssColorArray for .scss file with array of all types of variations.
     // for declaring the .scss function
-    let scssFunc = `@function scotch-color($name: "romance",
-$variant: $scotch-color-key,
-  $opacity: 1) {
+    let scssFunc = `@function scotch-color($name: "romance", $variant: $scotch-color-key, $opacity: 1) {
   $color: null;
   // Get the color spectrum
   $color-spectrum: map-get($scotch-colors, $name);
-
   // Get the color variant
   @if $color-spectrum {
     $color: map-get($color-spectrum, $variant);
   }
-
   // Get the alpha setting
   $alpha: if (type-of($opacity) == 'number', $opacity, map-get($scotch-opacity, $opacity));
-
   // Set the alpha of the color
   @if $alpha {
-    $color: rgba($color, $alpha);
-  }
-
+      $color: rgba($color, $alpha);
+    }
   @return $color;
-}
-`;
+};`;
     let scssTintShadeColorFunc = `@function shade($color, $percent) {
   @if not_is-color($color) {
-    @error "\`#{$color}\` is not a valid color for the \`$color\` argument in " + "the \`shade\` mixin.";
-  }
-
-  @else {
+      @error "\`#{$color}\` is not a valid color for the \`$color\` argument in " + "the \`shade\` mixin.";
+  } @else {
     @return mix(#000, $color, $percent);
   }
-}
+};
 
-@function tint($color,
-$percent) {
+@function tint($color, $percent) {
   @if not_is-color($color) {
     @error "\`#{$color}\` is not a valid color for the \`
-        $color\` argument in "+"the \`tint\` mixin.";
-  }
-
-  @else {
+    $color\` argument in "+"the \`tint\` mixin.";
+  } @else {
     @return mix(#fff, $color, $percent);
   }
-}`;
+};`;
     // Function to print colors to css file.
     let scssPrintColorsFunc = `// Print colors
 @mixin printColors($color-array: (), $selector: "color", $chain: "&.color-", $picker: "base") {
-
   @each $name,
   $values in $color-array {
     #{$chain}#{$name} {
       @if $selector=="color" {
         color: map-get($values, $picker);
-      }
-
-      @else if $selector=="background" {
+      } @else if $selector=="background" {
         background-color: map-get($values, $picker);
-      }
-
-      @else if $selector=="border" {
+      } @else if $selector=="border" {
         border-color: map-get($values, $picker);
       }
     }
   }
-}`;
+};`;
+
     // To run the .scss function.
     let scssRunFunc = `@include printColors($scotch-colors);
 @include printColors($scotch-colors, "color", "&.lighter-color-", "lighter");
@@ -219,102 +224,66 @@ $percent) {
 
     let extraScssFunc = `@mixin gradient($start-color, $end-color, $orientation) {
   background: $start-color;
-
   @if $orientation=="top>bottom" {
     background: linear-gradient(to bottom, $start-color, $end-color);
-  }
-
-  @else if $orientation=="bottom>top" {
+  } @else if $orientation=="bottom>top" {
     background: linear-gradient(to top, $start-color, $end-color);
-  }
-
-  @else if $orientation=="left>right" {
+  } @else if $orientation=="left>right" {
     background: linear-gradient(to right, $start-color, $end-color);
-  }
-
-  @else if $orientation=="bottomleft>topright" {
+  } @else if $orientation=="bottomleft>topright" {
     background: linear-gradient(to right top, $start-color, $end-color);
-  }
-
-  @else if $orientation=="topleft>bottomright" {
+  } @else if $orientation=="topleft>bottomright" {
     background: linear-gradient(to right bottom, $start-color, $end-color);
-  }
-
-  @else if $orientation=="right>left" {
+  } @else if $orientation=="right>left" {
     background: linear-gradient(to left, $start-color, $end-color);
-  }
-
-  @else if $orientation=="topright>bottomleft" {
+  } @else if $orientation=="topright>bottomleft" {
     background: linear-gradient(to left bottom, $start-color, $end-color);
-  }
-
-  @else if $orientation=="bottomright>topleft" {
+  } @else if $orientation=="bottomright>topleft" {
     background: linear-gradient(to left top, $start-color, $end-color);
-  }
-
-  @else if $orientation=="radial" {
+  } @else if $orientation=="radial" {
     background: radial-gradient(ellipse at center, $start-color, $end-color);
   }
-}`
+};`;
 
-    let generatedScssString = "@charset 'utf-8';" + "\n\n";
+    let generatedScssString = `@charset 'utf-8';
+    
+    ${scssPrintColorsFunc}
 
-    generatedScssString += scssPrintColorsFunc + "\n\n";
-    generatedScssString += extraScssFunc + "\n\n";
-    generatedScssString += defaultDarkLighten + "\n\n";
-    generatedScssString += scssTintShadeColorFunc + "\n\n";
-    generatedScssString += scssColors + "\n\n";
-    generatedScssString += scssColorArray + "\n\n";
-    generatedScssString += scssFunc + "\n\n";
-    generatedScssString += scssRunFunc;
+    ${extraScssFunc}
+
+    ${defaultDarkLighten}
+
+    ${scssTintShadeColorFunc}
+
+    ${scssColors}
+
+    ${scssColorArray}
+
+    ${scssFunc}
+
+    ${scssRunFunc}
+    `;
 
     // END THE ENTIRE SINGLE FILE PROCESS, MOVE THE INPUT FILE TO A DONE FOLDER AND START OVER AGAIN WITH THE NEXT FILE IN EXPORT FOLDER
-    paletteFile
+    // Check if the current export folder exist for the exported files
+    // if () {
+
+    // }
+    // fs.mkdirSync()
+    // fs.renameSync(paletteFile, path.join(importFolder, "done", file));
+    // fs.writeFileSync(path.join(exportFolder, trimmedFileName, "export.scss"), generatedScssString);
+    // fs.writeFileSync(path.join(exportFolder, `${trimmedFileName}.json`), JSON.stringify(jsonColors, null, "\t"));
   });
 
 
 
 
-  // colors.forEach(color => {
+
 
   //   let alpha = color.alpha;
   //   let rgbaString = `rgba(${red},${green},${blue},${alpha}.0)`;
   //   let parCol = Col.rgb(`rgb(${red},${green},${blue})`);
-  //   let colorObj = {
-  //     hex: "#" + convert.rgb.hex(red, green, blue),
-  //     rgba: {
-  //       r: red,
-  //       g: green,
-  //       b: blue,
-  //       a: alpha,
-  //       string: rgbaString
-  //     },
-  //     hsla: {
-  //       h: parCol.hsl().round().color[0],
-  //       s: parCol.hsl().round().color[1],
-  //       l: parCol.hsl().round().color[2],
-  //       a: parCol.hsl().valpha,
-  //       string: parCol.hsl().round().string()
-  //     },
-  //     cmyk: {
-  //       c: parCol.cmyk().round().color[0],
-  //       m: parCol.cmyk().round().color[1],
-  //       y: parCol.cmyk().round().color[2],
-  //       k: parCol.cmyk().round().color[3],
-  //     },
-  //     lab: {
-  //       l: convert.rgb.lab(red, green, blue)[0],
-  //       a: convert.rgb.lab(red, green, blue)[1],
-  //       b: convert.rgb.lab(red, green, blue)[2]
-  //     },
-  //     lum: {
-  //       dark: parCol.isDark(),
-  //       light: parCol.isLight(),
-  //       luminosity: parCol.luminosity().toFixed(3)
-  //     },
-  //     darker: parCol.darken(darkenLighten).rgb().round().string(),
-  //     lighter: parCol.lighten(darkenLighten).rgb().round().string()
-  //   };
+
   //   let scssName = colorName.replace(/\s+/g, "-").toLowerCase()
   //   scssString += `${scssName}: ("base": $${scssName}, "ligther": lighten($${scssName}, $default-darken-lighten), "darker": darken($${scssName}, $default-darken-lighten), "tint": tint($${scssName}, $default-darken-lighten), "shade": shade($${scssName}, $default-darken-lighten)),\n`;
 
@@ -325,7 +294,6 @@ $percent) {
 
 
 
-  // fs.writeFileSync(path.join(__dirname, "export", "export.scss"), generatedScssString);
-  // fs.writeFileSync(path.join(__dirname, "export", "export.json"), JSON.stringify(doneColors, null, "\t"));
+
 
   console.log("still running");
