@@ -1,6 +1,4 @@
-// const colConv = require("color-convert");
 const Color = require("color");
-// const colorString = require("color-string");
 const tiny = require("tinycolor2");
 // For getting color names and creating a colorid
 const nL = require("color-name-list");
@@ -8,8 +6,11 @@ const nL = require("color-name-list");
 const colorId = require("color-id");
 // @ts-ignore
 const nC = require("nearest-color");
-// const namer = require("color-namer");
 const gradStop = require("gradstop");
+const pans = require("./colors/pan");
+const nearestPantone = nC.from(pans);
+const nces = require("./colors/nce");
+const nearestNce = nC.from(nces);
 
 // ->
 //  Function to normalize the color and return a json formatted object, regarding of what the input file is
@@ -107,10 +108,18 @@ const processColor = function (color, space) {
   if ((typeof arg[0][0] === "string") && arg[0][0].length > 1) {
     colName = arg[0][0];
   } else if (arg[0][0] === "giveMeAName") {
-    let cNl = nL.reduce((o, { name, hex }) => Object.assign(o, { [name]: hex }), {});
+    let cNl = nL.reduce((o, {
+      name,
+      hex
+    }) => Object.assign(o, {
+      [name]: hex
+    }), {});
     let nearestCol = nC.from(cNl);
     colName = nearestCol(parsedColor.hex());
   }
+
+  let pan = nearestPantone(parsedColor.hex());
+  let ncec = nearestNce(parsedColor.hex());
 
   let colorObj = {
     // @ts-ignore
@@ -118,7 +127,7 @@ const processColor = function (color, space) {
     hex: parsedColor.hex(),
     hexa: tinyColor.toHex8String().toUpperCase(),
     vAlpha: parseFloat(parsedColor.alpha().toFixed(2)),
-    type: color[3],
+    type: space,
     rgb: {
       // @ts-ignore
       r: parseFloat(parsedColor.rgb().color[0].toFixed(2)),
@@ -199,8 +208,8 @@ const processColor = function (color, space) {
       3: parsedColor.apple().round().color[2]
     },
     lum: {
-      dark: parsedColor.isDark(),
-      bright: parsedColor.isLight(),
+      isDark: parsedColor.isDark(),
+      isBright: parsedColor.isLight(),
       luminosity: (parsedColor.luminosity() * 100).toFixed(2)
     },
     mods: {
@@ -221,8 +230,17 @@ const processColor = function (color, space) {
         })
       }
     },
+    nearestPantone: {
+      name: pan.name,
+      hex: pan.value,
+      rgb: pan.rgb
+    },
+    nearestNce: {
+      name: ncec.name,
+      hex: ncec.value,
+      rgb: ncec.rgb
+    }
   };
-
   return [colName, colorObj];
 };
 
